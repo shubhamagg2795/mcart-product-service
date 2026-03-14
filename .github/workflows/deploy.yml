@@ -34,13 +34,19 @@ jobs:
           source: "target/productservice-0.0.1-SNAPSHOT.jar"
           target: "/home/ubuntu/"
 
-      - name: Restart Application on EC2
+      - name: Deploy and Restart Application
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           script: |
+            echo "Stopping old application..."
+            pkill -f productservice || true
+            sleep 3
+
+            echo "Starting new application..."
             cd /home/ubuntu
-            rm -f app.log
             nohup java -jar productservice-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
+
+            echo "Application started"
