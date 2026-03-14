@@ -40,4 +40,10 @@ public class ProductController {
     public void deleteProduct(@PathVariable String id) {
         service.delete(id);
     }
+
+    @GetMapping("/version")
+    public String version() {
+        return "Product Service CI/CD Version 1";
+    }
+
 }
