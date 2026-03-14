@@ -33,29 +33,23 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           source: "target/productservice-0.0.1-SNAPSHOT.jar"
           target: "/home/ubuntu/"
+          strip_components: 1        # ← This copies JAR directly to /home/ubuntu/ not /home/ubuntu/target/
 
-      - name: Deploy and Restart Application
+      - name: Restart Application on EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           script: |
-            set +e
-
-            echo "Stopping old application..."
-            pkill -9 -f productservice-0.0.1-SNAPSHOT.jar || echo "No running process found"
-
-            sleep 2
-
-            echo "Replacing jar..."
-            cp /home/ubuntu/target/productservice-0.0.1-SNAPSHOT.jar /home/ubuntu/productservice-0.0.1-SNAPSHOT.jar
-
-            echo "Starting new application..."
             cd /home/ubuntu
-            setsid java -jar productservice-0.0.1-SNAPSHOT.jar > app.log 2>&1 < /dev/null &
+            rm -f app.log
 
-            sleep 5
-            pgrep -f productservice-0.0.1-SNAPSHOT.jar && echo "SUCCESS: App is running!" || echo "FAILED: App did not start"
+            # Kill old process safely without triggering Docker KILL
+            OLD_PID=$(pgrep -f productservice-0.0.1-SNAPSHOT.jar)
+            if [ -n "$OLD_PID" ]; then
+              kill $OLD_PID 2>/dev/null
+              sleep 3
+            fi
 
-            echo "Deployment completed"
+            nohup java -jar productservice-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
