@@ -40,6 +40,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
+          request_pty: true
           script: |
             set +e
 
@@ -56,10 +57,15 @@ jobs:
             sleep 2
 
             echo "Replacing jar..."
-            cp /home/ubuntu/target/productservice-0.0.1-SNAPSHOT.jar /home/ubuntu/productservice-0.0.1-SNAPSHOT.jar || true
+            cp /home/ubuntu/target/productservice-0.0.1-SNAPSHOT.jar /home/ubuntu/productservice-0.0.1-SNAPSHOT.jar
 
             echo "Starting new application..."
             cd /home/ubuntu
             nohup java -jar productservice-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
+            disown $!
+
+            sleep 3
+            echo "Verifying process started..."
+            pgrep -f productservice-0.0.1-SNAPSHOT.jar && echo "App is running!" || echo "WARNING: App may not have started"
 
             echo "Deployment completed"
