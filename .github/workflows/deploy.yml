@@ -43,10 +43,13 @@ jobs:
           script: |
             echo "Stopping old application..."
             pkill -f productservice || true
-            sleep 3
+            sleep 2
+
+            echo "Replacing jar..."
+            cp /home/ubuntu/target/productservice-0.0.1-SNAPSHOT.jar /home/ubuntu/productservice-0.0.1-SNAPSHOT.jar || true
 
             echo "Starting new application..."
             cd /home/ubuntu
             nohup java -jar productservice-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
 
-            echo "Application started"
+            echo "Deployment completed"
