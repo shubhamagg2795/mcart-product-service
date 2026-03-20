@@ -10,6 +10,6 @@ public class VersionController {
 
     @GetMapping("/version")
     public String version() {
-        return "Product Service CI/CD Version 1";
+        return "Product Service CI/CD Version 2";
     }
 }
