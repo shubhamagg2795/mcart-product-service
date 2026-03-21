@@ -9,38 +9,45 @@ import org.opensearch.client.RequestOptions;
 import org.opensearch.client.RestHighLevelClient;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class ProductService {
 
     private final ProductRepository repository;
-    private final RestHighLevelClient client;
 
-    public ProductService(ProductRepository repository, RestHighLevelClient client) {
+    // Optional — only injected when OpenSearch is enabled
+    // When disabled, this will be null and we fall back to MongoDB
+    @Autowired(required = false)
+    private RestHighLevelClient client;
+
+    public ProductService(ProductRepository repository) {
         this.repository = repository;
-        this.client = client;
     }
 
     public Product save(Product product) {
         Product saved = repository.save(product);
 
-        // index in OpenSearch
-        IndexRequest request = new IndexRequest("products")
-                .id(saved.getId())
-                .source(Map.of(
-                        "name", saved.getName(),
-                        "description", saved.getDescription(),
-                        "price", saved.getPrice()
-                ));
-        try {
-            client.index(request, RequestOptions.DEFAULT);
-        } catch (Exception e) {
-            e.printStackTrace();
+        // Index in OpenSearch only if available
+        if (client != null) {
+            IndexRequest request = new IndexRequest("products")
+                    .id(saved.getId())
+                    .source(Map.of(
+                            "name", saved.getName(),
+                            "description", saved.getDescription(),
+                            "price", saved.getPrice()
+                    ));
+            try {
+                client.index(request, RequestOptions.DEFAULT);
+            } catch (Exception e) {
+                System.out.println("OpenSearch indexing skipped: " + e.getMessage());
+            }
         }
 
         return saved;
@@ -56,9 +63,20 @@ public class ProductService {
     }
 
     public List<Product> searchByName(String name) {
+
+        // If OpenSearch is available — use it
+        if (client != null) {
+            return searchWithOpenSearch(name);
+        }
+
+        // Fallback — use MongoDB regex search
+        System.out.println("OpenSearch not available — using MongoDB search");
+        return repository.findByNameContainingIgnoreCase(name);
+    }
+
+    private List<Product> searchWithOpenSearch(String name) {
         List<Product> results = new ArrayList<>();
 
-        // query OpenSearch
         SearchRequest searchRequest = new SearchRequest("products");
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         sourceBuilder.query(QueryBuilders.matchQuery("name", name));
@@ -76,7 +94,8 @@ public class ProductService {
                 results.add(p);
             });
         } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println("OpenSearch search failed, falling back to MongoDB: " + e.getMessage());
+            return repository.findByNameContainingIgnoreCase(name);
         }
 
         return results;
@@ -85,12 +104,18 @@ public class ProductService {
     public void delete(String id) {
         repository.deleteById(id);
 
-        try {
-            client.delete(new org.opensearch.action.delete.DeleteRequest("products", id), RequestOptions.DEFAULT);
-        } catch (Exception e) {
-            e.printStackTrace();
+        if (client != null) {
+            try {
+                client.delete(
+                        new org.opensearch.action.delete.DeleteRequest("products", id),
+                        RequestOptions.DEFAULT
+                );
+            } catch (Exception e) {
+                System.out.println("OpenSearch delete skipped: " + e.getMessage());
+            }
         }
     }
+
     public void deleteAll() {
         repository.deleteAll();
     }
